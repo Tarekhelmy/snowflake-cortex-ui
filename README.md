@@ -191,3 +191,24 @@ The application can be deployed to cloud platforms like:
 - Monitor application performance and logs
 - Back up conversation data
 - Keep Snowflake credentials secure and rotate them periodically
+
+
+errors: """
+/home/azureuser/localfiles/workspace/snowflake-cortex-ui-1/main.py:20: DeprecationWarning: Python Runtime 3.8 reached its End-Of-Life (EOL) on October 14, 2024, there will be no further bug fixes or security updates for this runtime. We recommend that you upgrade your existing Python 3.8 objects to Python 3.9, 3.10 or 3.11 before March 31, 2025. Please note that end of support does not impact execution, and you will still be able to update and invoke existing objects. However, they will be running on an unsupported runtime which will no longer be maintained or patched by the Snowflake team. For more details, please refer to https://docs.snowflake.com/en/developer-guide/python-runtime-support-policy.
+  from snowflake.snowpark import Session
+/home/azureuser/localfiles/workspace/snowflake-cortex-ui-1/main.py:402: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+/home/azureuser/localfiles/workspace/snowflake-cortex-ui-1/main.py:410: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("shutdown")
+WARNING:  You must pass the application as an import string to enable 'reload' or 'workers'.
+"""
