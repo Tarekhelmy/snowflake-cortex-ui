@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any, Tuple
+
 import os
 import uuid
 import json
@@ -28,7 +29,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Snowflake Cortex Chat API")
+app = FastAPI(title="Snowflake Cortex Chat API", lifespan=lifespan)
 
 # Enable CORS
 app.add_middleware(
@@ -398,19 +399,17 @@ def load_conversations_from_file(filename="conversations.json"):
         # If file doesn't exist or is malformed, start with empty conversations
         pass
 
-# Startup and shutdown events
-@app.on_event("startup")
-async def startup_event():
+
+async def lifespan(app: FastAPI):
     # Create necessary directories
     os.makedirs("static", exist_ok=True)
     os.makedirs("templates", exist_ok=True)
     load_conversations_from_file()
     logger.info("Application started")
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield  
     save_conversations_to_file()
     logger.info("Application shutting down")
+
 
 if __name__ == "__main__":
     import uvicorn

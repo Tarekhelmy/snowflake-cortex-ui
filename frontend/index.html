@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cortex Analyst Chat</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <h2>Cortex Analyst</h2>
+            
+            <div class="sidebar-section">
+                <h3>Semantic Model</h3>
+                <select id="semantic-model-select">
+                    <option value="" disabled selected>Loading models...</option>
+                </select>
+            </div>
+
+            <div class="sidebar-section">
+                <button id="clear-chat" class="btn btn-secondary">Clear Chat History</button>
+            </div>
+
+            <div class="sidebar-section" style="margin-top: auto;">
+                <div id="connection-status">Status: Connecting...</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div id="chat-container" class="chat-container">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <div class="chat-input">
+                <input type="text" id="user-input" placeholder="Type your question..." />
+                <button id="send-btn" class="btn send-btn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
