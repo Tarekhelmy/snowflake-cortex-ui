@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from snowflake.snowpark.context import get_active_session  # To interact with Snowflake sessions
 from snowflake.snowpark.exceptions import SnowparkSQLException
+import os
 
 # List of available semantic model paths in the format: <DATABASE>.<SCHEMA>.<STAGE>/<FILE-NAME>
 # Each path points to a YAML file defining a semantic model
@@ -25,6 +26,46 @@ AVAILABLE_SEMANTIC_MODELS_PATHS = [
 API_ENDPOINT = "/api/v2/cortex/analyst/message"
 FEEDBACK_API_ENDPOINT = "/api/v2/cortex/analyst/feedback"
 API_TIMEOUT = 50000  # in milliseconds
+
+def get_snowflake_session():
+    """Create a Snowflake Snowpark session using environment variables"""
+    try:
+        # Connection parameters
+        if os.path.isfile("/snowflake/session/token"):
+            creds = {
+                'host': os.getenv('SNOWFLAKE_HOST'),
+                'port': os.getenv('SNOWFLAKE_PORT'),
+                'protocol': "https",
+                'account': os.getenv('SNOWFLAKE_ACCOUNT'),
+                'authenticator': "oauth",
+                'token': open('/snowflake/session/token', 'r').read(),
+                'warehouse': os.getenv('SNOWFLAKE_WAREHOUSE'),
+                'database': os.getenv('SNOWFLAKE_DATABASE'),
+                'schema': os.getenv('SNOWFLAKE_SCHEMA'),
+                'client_session_keep_alive': True
+            }
+        else:
+            creds = {
+                'account': os.getenv('SNOWFLAKE_ACCOUNT'),
+                'user': os.getenv('SNOWFLAKE_USER'),
+                'password': os.getenv('SNOWFLAKE_PASSWORD'),
+                'warehouse': os.getenv('SNOWFLAKE_WAREHOUSE'),
+                'database': os.getenv('SNOWFLAKE_DATABASE'),
+                'schema': os.getenv('SNOWFLAKE_SCHEMA'),
+                'client_session_keep_alive': True
+            }
+        
+        # Filter out None values
+        connection_parameters = creds
+        connection_parameters = {k: v for k, v in connection_parameters.items() if v is not None}
+        
+        # Create and return session
+        session = Session.builder.configs(connection_parameters).create()
+        logger.info("Successfully created Snowflake session")
+        return session
+    except Exception as e:
+        logger.error(f"Error connecting to Snowflake: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to connect to Snowflake: {str(e)}")
 
 # Initialize a Snowpark session for executing queries
 session = get_active_session()
