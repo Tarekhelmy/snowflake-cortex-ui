@@ -201,12 +201,65 @@ body {
     margin: 10px 0;
 }
 
+.model-selector {
+    margin-left: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.model-selector select {
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 14px;
+}
+
 .message-content code {
     font-family: 'Courier New', Courier, monospace;
     font-size: 90%;
     background-color: rgba(0, 0, 0, 0.2);
     padding: 2px 4px;
     border-radius: 3px;
+}
+
+.message-metadata {
+    margin-top: 15px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 10px;
+}
+
+.metadata-toggle {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.metadata-content {
+    background-color: var(--input-bg);
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.sql-container {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: var(--input-bg);
+    border-radius: 5px;
+}
+
+.sql-results {
+    margin-top: 10px;
+    overflow-x: auto;
 }
 
 .loading-indicator {

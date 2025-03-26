@@ -1,4 +1,4 @@
-x   // Config - API base URL (change this to your FastAPI backend address)
+// Config - API base URL (change this to your FastAPI backend address)
 const API_BASE_URL = '/api';
 
 // DOM Elements
@@ -136,12 +136,44 @@ init();
 // Initialize app
 async function init() {
     try {
+        // Fetch available semantic models
+        await fetchSemanticModels();
+        
+        // Fetch conversations and render UI
         await fetchConversations();
         renderConversations();
         renderMessages();
     } catch (error) {
         console.error('Error initializing app:', error);
     }
+}
+
+// Fetch semantic models from API
+async function fetchSemanticModels() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/semantic-models`);
+        if (response.ok) {
+            const data = await response.json();
+            populateSemanticModelSelector(data.models);
+        }
+    } catch (error) {
+        console.error('Error fetching semantic models:', error);
+    }
+}
+
+// Populate semantic model selector dropdown
+function populateSemanticModelSelector(models) {
+    const selector = document.getElementById('semanticModelSelector');
+    selector.innerHTML = '';
+    
+    models.forEach(model => {
+        const option = document.createElement('option');
+        // Extract just the file name from the path
+        const fileName = model.split('/').pop();
+        option.value = model;
+        option.textContent = fileName;
+        selector.appendChild(option);
+    });
 }
 
 // Fetch conversations from API
@@ -260,6 +292,37 @@ function renderMessages() {
         content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
         
         contentDiv.innerHTML = content;
+        
+        // Add metadata display if available
+        if (message.metadata && message.role === 'assistant') {
+            const metadataDiv = document.createElement('div');
+            metadataDiv.className = 'message-metadata';
+            
+            if (message.metadata.analyst_data) {
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'metadata-toggle';
+                toggleBtn.textContent = 'Show Analysis Data';
+                
+                const dataDiv = document.createElement('div');
+                dataDiv.className = 'metadata-content';
+                dataDiv.style.display = 'none';
+                dataDiv.innerHTML = `<pre>${JSON.stringify(message.metadata.analyst_data, null, 2)}</pre>`;
+                
+                toggleBtn.addEventListener('click', () => {
+                    if (dataDiv.style.display === 'none') {
+                        dataDiv.style.display = 'block';
+                        toggleBtn.textContent = 'Hide Analysis Data';
+                    } else {
+                        dataDiv.style.display = 'none';
+                        toggleBtn.textContent = 'Show Analysis Data';
+                    }
+                });
+                
+                metadataDiv.appendChild(toggleBtn);
+                metadataDiv.appendChild(dataDiv);
+                contentDiv.appendChild(metadataDiv);
+            }
+        }
         
         messageDiv.appendChild(avatarDiv);
         messageDiv.appendChild(contentDiv);
