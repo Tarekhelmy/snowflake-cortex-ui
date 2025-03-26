@@ -104,6 +104,7 @@ def get_snowflake_session():
             }
         
         # Filter out None values
+        connection_parameters = creds
         connection_parameters = {k: v for k, v in connection_parameters.items() if v is not None}
         
         # Create and return session
