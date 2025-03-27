@@ -1,5 +1,5 @@
 // Define API endpoints and DOM elements
-const API_BASE_URL = 'http://localhost:8000'; // Change this to your FastAPI server URL
+const API_BASE_URL = window.location.origin; // Use the window location for relative paths
 const chatContainer = document.getElementById('chat-container');
 const userInput = document.getElementById('user-input');
 const sendButton = document.getElementById('send-btn');
@@ -80,22 +80,27 @@ async function sendMessage(text) {
         
         messages.push(newMessage);
         
+        // Create the request payload exactly matching the expected format
+        const requestPayload = {
+            messages: messages,
+            semantic_model_file: selectedSemanticModel ? `@${selectedSemanticModel}` : ""
+        };
+        
+        console.log("Sending request with payload:", requestPayload);
+        
         const response = await fetch(`${API_BASE_URL}/analyst/message`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                messages: messages,
-                semantic_model_file: `@${selectedSemanticModel}`
-            })
+            body: JSON.stringify(requestPayload)
         });
         
         // Remove loading indicator
         chatContainer.removeChild(loadingElement);
         
         if (!response.ok) {
-            throw new Error('Failed to get response from server');
+            throw new Error(`Failed to get response from server: ${response.status} ${response.statusText}`);
         }
         
         const data = await response.json();
@@ -122,7 +127,7 @@ async function sendMessage(text) {
         if (chatContainer.contains(loadingElement)) {
             chatContainer.removeChild(loadingElement);
         }
-        addSystemMessage('Error: Failed to get a response. Please try again later.');
+        addSystemMessage(`Error: Failed to get a response. ${error.message}`);
     } finally {
         isWaitingForResponse = false;
     }

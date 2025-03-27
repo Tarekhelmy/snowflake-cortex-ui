@@ -3,69 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snowflake Cortex Chat</title>
-    <link rel="stylesheet" href="static/styles.css">
+    <title>Cortex Analyst Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <button class="new-chat-button" id="newChatBtn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 4V20M4 12H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            New Chat
-        </button>
-        
-        <div class="conversations-list" id="conversationsList">
-            <!-- Conversations will be populated here -->
-        </div>
-        
-        <div class="sidebar-footer">
-            <a href="https://docs.snowflake.com/en/user-guide/cortex-overview" target="_blank">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M18 13V19C18 19.5304 17.7893 20.0391 17.4142 20.4142C17.0391 20.7893 16.5304 21 16 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V8C3 7.46957 3.21071 6.96086 3.58579 6.58579C3.96086 6.21071 4.46957 6 5 6H11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M15 3H21V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M10 14L21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Snowflake Cortex Docs
-            </a>
-        </div>
-    </div>
-    
-    <!-- Main Chat Area -->
-    <div class="chat-container">
-        <div class="chat-header">
-            <button class="menu-button" id="menuBtn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3 12H21M3 6H21M3 18H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </button>
+    <div class="app-container">
+        <div class="sidebar">
+            <h2>Cortex Analyst</h2>
+            
+            <div class="sidebar-section">
+                <h3>Semantic Model</h3>
+                <select id="semantic-model-select">
+                    <option value="" disabled selected>Loading models...</option>
+                </select>
+            </div>
 
-        <div class="messages-container" id="messagesContainer">
-            <!-- Default welcome message -->
-            <div class="message assistant">
-                <div class="message-avatar">AI</div>
-                <div class="message-content">
-                    Hello! I'm your Snowflake Cortex assistant. How can I help you with your data today?
-                </div>
+            <div class="sidebar-section">
+                <button id="clear-chat" class="btn btn-secondary">Clear Chat History</button>
+            </div>
+
+            <div class="sidebar-section" style="margin-top: auto;">
+                <div id="connection-status">Status: Connecting...</div>
             </div>
         </div>
-        
-        <div class="input-container">
-            <textarea 
-                id="messageInput" 
-                class="input-textarea" 
-                placeholder="Message Snowflake Cortex..."
-                rows="1"
-            ></textarea>
-            <button class="send-button" id="sendBtn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </button>
+
+        <div class="main-content">
+            <div id="chat-container" class="chat-container">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <div class="chat-input">
+                <input type="text" id="user-input" placeholder="Type your question..." />
+                <button id="send-btn" class="btn send-btn">Send</button>
+            </div>
         </div>
     </div>
 
-    <script src="static/script.js"></script>
+    <script src="{{ url_for('static', path='/js/script.js') }}"></script>
 </body>
 </html>

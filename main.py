@@ -1,81 +1,211 @@
-# Copyright 2025 Snowflake Inc.
-# SPDX-License-Identifier: Apache-2.0
-
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any, Tuple
-
-import os
-import uuid
+"""
+Cortex Analyst API
+====================
+This API allows users to interact with their data using natural language using Snowflake's Cortex service.
+"""
 import json
-import logging
-import asyncio
+import time
+import aiohttp
 from datetime import datetime
-from dotenv import load_dotenv
+from typing import Dict, List, Optional, Union, Any
+import logging
+import pandas as pd
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from urllib.parse import urlunparse
+
+
+from typing import TypedDict, Union
 
 # Snowflake imports
 from snowflake.snowpark import Session
 from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.exceptions import SnowparkSQLException
+from snowflake.connector import SnowflakeConnection
 
-# Load environment variables
-load_dotenv()
+import os
 
-# Configure logging
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Snowflake Cortex Chat API", lifespan=lifespan)
-
-# Enable CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Templates for serving the HTML
-templates = Jinja2Templates(directory="templates")
-
-# Pydantic models
-class Message(BaseModel):
-    role: str
-    content: str
-    id: str
-    timestamp: Optional[str] = None
-    conversation_id: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-class MessageRequest(BaseModel):
-    message: str
-    conversation_id: Optional[str] = None
-    semantic_model: Optional[str] = None
-
-class Conversation(BaseModel):
-    id: str
-    title: str
-    messages: List[Message]
-    created_at: str
-    updated_at: str
-
-# In-memory storage (replace with database in production)
-conversations: Dict[str, Conversation] = {}
-
-# Define available semantic models
-SEMANTIC_MODELS = [
-    "FINANCIAL_METRICS.ANALYSTS.PERFORMANCE/financial_metrics.yaml",
-    "SALES_DATA.ANALYTICS.DASHBOARD/sales_analytics.yaml"
+# List of available semantic model paths
+AVAILABLE_SEMANTIC_MODELS_PATHS = [
+    "VAP_DEV_VAPNL_POC.ANALYSE_POC.INPUT_STAGE_CORTEX/PIANO_B2C.yaml"
 ]
+API_ENDPOINT = "/api/v2/cortex/analyst/message"
+FEEDBACK_API_ENDPOINT = "/api/v2/cortex/analyst/feedback"
+API_TIMEOUT = 50000  # in milliseconds
 
+class Headers(TypedDict):
+    Accept: str
+    Content_Type: str
+    Authorization: str
+# Helper classes for Cortex Analyst Tool
+class SnowflakeError(Exception):
+    """Exception raised for Snowflake errors."""
+    def __init__(self, message="An error occurred with Snowflake"):
+        self.message = message
+        super().__init__(self.message)
+
+class CortexEndpointBuilder:
+    def __init__(self, connection: Union[Session, SnowflakeConnection]):
+        self.connection = _get_connection(connection)
+        self.BASE_URL = self._set_base_url()
+        self.inside_snowflake = self._determine_runtime()
+        self.BASE_HEADERS = self._set_base_headers()
+
+    def _determine_runtime(self):
+        try:
+            from _stored_proc_restful import StoredProcRestful
+
+            return True
+        except ImportError:
+            return False
+
+    def _set_base_url(self):
+        scheme = "https"
+        con = self.connection
+        if hasattr(con, "scheme"):
+            scheme = con.scheme
+        host = con.host
+        host = host.replace("_", "-")
+        host = host.lower()
+        url = urlunparse((scheme, host, "", "", "", ""))
+        return url
+
+    def _set_base_headers(self):
+        if self.inside_snowflake:
+            token = None
+        else:
+            token = self.connection.rest.token
+        return {
+            "Content-Type": "application/json",
+            "Authorization": f'Snowflake Token="{token}"',
+        }
+
+    def get_complete_endpoint(self):
+        URL_SUFFIX = "/api/v2/cortex/inference:complete"
+        if self.inside_snowflake:
+            return URL_SUFFIX
+        return f"{self.BASE_URL}{URL_SUFFIX}"
+
+    def get_analyst_endpoint(self):
+        URL_SUFFIX = "/api/v2/cortex/analyst/message"
+        if self.inside_snowflake:
+            return URL_SUFFIX
+        return f"{self.BASE_URL}{URL_SUFFIX}"
+
+    def get_search_endpoint(self, database, schema, service_name):
+        URL_SUFFIX = f"/api/v2/databases/{database}/schemas/{schema}/cortex-search-services/{service_name}:query"
+        URL_SUFFIX = URL_SUFFIX.lower()
+        if self.inside_snowflake:
+            return URL_SUFFIX
+        return f"{self.BASE_URL}{URL_SUFFIX}"
+
+    def get_complete_headers(self) -> Headers:
+        return self.BASE_HEADERS | {"Accept": "application/json"}
+
+    def get_analyst_headers(self) -> Headers:
+        return self.BASE_HEADERS
+
+    def get_search_headers(self) -> Headers:
+        return self.BASE_HEADERS | {"Accept": "application/json"}
+
+class CortexAnalystTool:
+    """Cortex Analyst tool for interacting with Snowflake's Cortex service."""
+
+    def __init__(
+        self,
+        semantic_model,
+        stage,
+        connection,
+        service_topic="data",
+        data_description="the source data"
+    ):
+        """Initialize the Cortex Analyst Tool.
+        
+        Parameters
+        ----------
+        semantic_model (str): yaml file name containing semantic model for Cortex Analyst
+        stage (str): name of stage containing semantic model yaml.
+        connection (object): snowpark connection object
+        service_topic (str): topic of the data in the tables
+        data_description (str): description of the source data
+        """
+        self.connection = CortexEndpointBuilder(connection).connection
+        self.FILE = semantic_model
+        self.STAGE = stage
+        self.service_topic = service_topic
+        self.data_description = data_description
+        
+        logger.info(f"Cortex Analyst Tool successfully initialized")
+
+    async def ask(self, query):
+        """Process a query using Cortex Analyst."""
+        logger.debug(f"Cortex Analyst Prompt: {query}")
+
+        url, headers, data = self._prepare_analyst_request(prompt=query)
+
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.post(url=url, json=data) as response:
+                response_text = await response.text()
+                json_response = json.loads(response_text)
+
+        # Return the raw response for further processing in the API
+        return json_response
+
+    def _prepare_analyst_request(self, prompt):
+        """Prepare a request to the Cortex Analyst API."""
+        data = {
+            "messages": [
+                {"role": "user", "content": [{"type": "text", "text": prompt}]}
+            ],
+            "semantic_model_file": f"""@VAP_DEV_VAPNL_POC.ANALYSE_POC.INPUT_STAGE_CORTEX/{self.FILE}""",
+        }
+
+        eb = CortexEndpointBuilder(self.connection)
+        headers = eb.get_analyst_headers()
+        url = eb.get_analyst_endpoint()
+
+        return url, headers, data
+
+    def process_sql_response(self, response):
+        """Process SQL query in the response and execute it."""
+        if len(response) > 1 and "sql" in response[0]["type"] and "statement" in response[1]:
+            sql_query = response[1]["statement"]
+            logger.debug(f"Cortex Analyst SQL Query: {sql_query}")
+            
+            # Execute the query
+
+            cursor = self.connection.cursor()
+            cursor.execute(sql_query)
+            result = cursor.fetch_pandas_all()
+            
+            return {
+                "query": sql_query,
+                "data": result.to_dict(orient="records"),
+                "columns": list(result.columns)
+            }
+        
+        return None
+
+def _get_connection(snowflake_connection):
+    """Helper to standardize connection handling."""
+    if isinstance(snowflake_connection, Session):
+        # If it's a Snowpark session, use the underlying connection
+        return snowflake_connection._conn._conn
+    elif isinstance(snowflake_connection, SnowflakeConnection):
+        # If it's already a SnowflakeConnection, use it directly
+        return snowflake_connection
+    else:
+        raise ValueError("Unsupported connection type")
+
+# Setup Snowflake connection
 def get_snowflake_session():
     """Create a Snowflake Snowpark session using environment variables"""
     try:
@@ -101,316 +231,328 @@ def get_snowflake_session():
                 'warehouse': os.getenv('SNOWFLAKE_WAREHOUSE'),
                 'database': os.getenv('SNOWFLAKE_DATABASE'),
                 'schema': os.getenv('SNOWFLAKE_SCHEMA'),
+                'authenticator': 'externalbrowser',
                 'client_session_keep_alive': True
             }
         
         # Filter out None values
-        connection_parameters = creds
-        connection_parameters = {k: v for k, v in connection_parameters.items() if v is not None}
+        connection_parameters = {k: v for k, v in creds.items() if v is not None}
         
         # Create and return session
         session = Session.builder.configs(connection_parameters).create()
         logger.info("Successfully created Snowflake session")
+        if isinstance(session, Session):
+            return getattr(session, "connection")
         return session
     except Exception as e:
         logger.error(f"Error connecting to Snowflake: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to connect to Snowflake: {str(e)}")
 
-def execute_snowflake_query(session, query: str) -> Tuple[Any, Optional[str]]:
-    """Execute a query in Snowflake and return the results"""
-    try:
-        result = session.sql(query).collect()
-        return result, None
-    except SnowparkSQLException as e:
-        error_msg = str(e)
-        logger.error(f"Snowflake query error: {error_msg}")
-        return None, error_msg
+# Initialize FastAPI app
+app = FastAPI(
+    title="Cortex Analyst API",
+    description="API for interacting with data using natural language via Snowflake Cortex",
+    version="1.0.0",
+)
 
-# Query Snowflake Cortex Analyst
-async def query_cortex_analyst(message: str, semantic_model: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Query Snowflake Cortex Analyst to analyze the user's question and generate a response
-    """
-    try:
-        session = get_snowflake_session()
-        
-        # Escape single quotes in the message for SQL safety
-        safe_message = message.replace("'", "''")
-        
-        # Use the provided semantic model or default to the first one in our list
-        if not semantic_model:
-            semantic_model = SEMANTIC_MODELS[0]
-        
-        # First, use Cortex Analyst to analyze the user's question
-        analyst_query = f"""
-        SELECT CORTEX_ANALYST(
-            '{safe_message}',
-            semantic_model_file => '@{semantic_model}',
-            service_topic => 'financial data and business metrics',
-            data_description => 'company financial metrics and performance data'
-        )
-        """
-        
-        logger.info(f"Executing Cortex Analyst query with semantic model: {semantic_model}")
-        result, error = execute_snowflake_query(session, analyst_query)
-        
-        if error:
-            logger.error(f"Cortex Analyst query error: {error}")
-            return {
-                "content": f"I encountered an error analyzing your question: {error}",
-                "metadata": None
-            }
-            
-        if not result or not result[0]:
-            logger.warning("No result from Cortex Analyst")
-            return {
-                "content": "I'm having trouble analyzing your question. Could you please rephrase it?",
-                "metadata": None
-            }
-        
-        # Extract the analyst data and parse it
-        analyst_data = result[0][0]
-        logger.info(f"Analyst result received")
-        
-        # Check if analyst_data contains SQL
-        analyst_json = json.loads(analyst_data) if isinstance(analyst_data, str) else analyst_data
-        
-        # If we have SQL in the result, execute it
-        sql_statement = None
-        sql_results = None
-        
-        if isinstance(analyst_json, dict) and 'generated_sql' in analyst_json:
-            sql_statement = analyst_json['generated_sql']
-            logger.info(f"Executing generated SQL: {sql_statement}")
-            sql_results, sql_error = execute_snowflake_query(session, sql_statement)
-            
-            if sql_error:
-                logger.error(f"SQL execution error: {sql_error}")
-                sql_results = f"Error executing SQL: {sql_error}"
-            else:
-                # Convert SQL results to a more readable format
-                sql_results = [dict(row) for row in sql_results] if sql_results else []
-        
-        # Next, use Cortex Completion to interpret the analyst results and generate a response
-        completion_query = f"""
-        SELECT CORTEX_COMPLETION(
-            'You are a helpful financial data assistant that provides clear insights. 
-             The user asked: "{safe_message}"
-             Based on data analysis, here is the information: {json.dumps(analyst_json)}
-             {f"SQL Query Results: {json.dumps(sql_results)}" if sql_results else ""}
-             Provide a clear, helpful response that answers the user\'s question based on this data.',
-            temperature => 0.3,
-            max_tokens => 1000
-        )
-        """
-        
-        logger.info(f"Executing Cortex Completion query")
-        completion_result, completion_error = execute_snowflake_query(session, completion_query)
-        
-        # Close the session
-        session.close()
-        
-        if completion_error:
-            logger.error(f"Completion query error: {completion_error}")
-            return {
-                "content": f"I processed your data but encountered an error generating a response: {completion_error}",
-                "metadata": {"analyst_data": analyst_json}
-            }
-        
-        if completion_result and completion_result[0]:
-            # Prepare metadata with both analyst data and SQL results if available
-            metadata = {
-                "analyst_data": analyst_json,
-                "sql_statement": sql_statement,
-                "sql_results": sql_results
-            }
-            
-            return {
-                "content": completion_result[0][0],
-                "metadata": metadata
-            }
-        else:
-            return {
-                "content": "I processed your question but couldn't generate a helpful response. Please try again with a more specific question.",
-                "metadata": {"analyst_data": analyst_json}
-            }
-    except Exception as e:
-        logger.error(f"Error in query_cortex_analyst: {e}", exc_info=True)
-        return {
-            "content": f"I encountered an error when processing your request: {str(e)}",
-            "metadata": None
-        }
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Fallback to standard Cortex completion if Analyst fails
-async def query_cortex_completion(message: str) -> str:
-    """Fallback to standard Cortex completion if Analyst fails"""
-    try:
-        session = get_snowflake_session()
-        
-        # Escape single quotes in the message for SQL safety
-        safe_message = message.replace("'", "''")
-        
-        # Standard query using Snowflake Cortex
-        query = f"""
-        SELECT CORTEX_COMPLETION('{safe_message}', 
-                               system_prompt => 'You are a helpful assistant that analyzes data and provides insights',
-                               temperature => 0.7,
-                               max_tokens => 1000)
-        """
-        
-        result, error = execute_snowflake_query(session, query)
-        session.close()
-        
-        if error:
-            return f"I encountered an error processing your request: {error}"
-            
-        if result and result[0]:
-            return result[0][0]
-        else:
-            return "Sorry, I couldn't process your request."
-    except Exception as e:
-        logger.error(f"Error with fallback Cortex completion: {e}")
-        return f"I encountered an error when processing your request: {str(e)}"
+# Set up templates
+templates = Jinja2Templates(directory="templates")
 
-# API Routes
-@app.get("/api/conversations", response_model=List[Conversation])
-async def get_conversations():
-    return list(conversations.values())
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
-@app.get("/api/conversations/{conversation_id}", response_model=Conversation)
-async def get_conversation(conversation_id: str):
-    if conversation_id not in conversations:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    return conversations[conversation_id]
-
-@app.delete("/api/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str):
-    if conversation_id not in conversations:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    del conversations[conversation_id]
-    return {"success": True}
-
-@app.get("/api/semantic-models")
-async def get_semantic_models():
-    """Return the list of available semantic models"""
-    return {"models": SEMANTIC_MODELS}
-
-@app.post("/api/messages", response_model=Message)
-async def send_message(request: MessageRequest):
-    user_message = request.message.strip()
-    conversation_id = request.conversation_id
-    semantic_model = request.semantic_model
-    timestamp = datetime.now().isoformat()
-    
-    if not user_message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
-    
-    # Create a new conversation if needed
-    if not conversation_id or conversation_id not in conversations:
-        conversation_id = str(uuid.uuid4())
-        conversations[conversation_id] = Conversation(
-            id=conversation_id,
-            title=user_message[:30] + ("..." if len(user_message) > 30 else ""),
-            messages=[],
-            created_at=timestamp,
-            updated_at=timestamp
-        )
-    
-    # Add user message to conversation
-    user_message_obj = Message(
-        id=str(uuid.uuid4()),
-        role="user",
-        content=user_message,
-        timestamp=timestamp,
-        conversation_id=conversation_id
+# Try to initialize a Snowpark session for executing queries
+try:
+    session = get_snowflake_session()
+    # Initialize the Cortex Analyst Tool
+    cortex_tool = CortexAnalystTool(
+        semantic_model=AVAILABLE_SEMANTIC_MODELS_PATHS[0].split('/')[-1],
+        stage=AVAILABLE_SEMANTIC_MODELS_PATHS[0].split('/')[0].split('.')[-1],
+        connection=session,
+        service_topic="user data",
+        data_description="analytics data"
     )
-    conversations[conversation_id].messages.append(user_message_obj)
-    conversations[conversation_id].updated_at = timestamp
-    
-    # First try with Cortex Analyst
-    try:
-        logger.info(f"Processing message with Cortex Analyst: {user_message}")
-        analyst_response = await query_cortex_analyst(user_message, semantic_model)
-        response_content = analyst_response["content"]
-        metadata = analyst_response["metadata"]
-        
-        # Create assistant message
-        assistant_message = Message(
-            id=str(uuid.uuid4()),
-            role="assistant",
-            content=response_content,
-            timestamp=datetime.now().isoformat(),
-            conversation_id=conversation_id,
-            metadata=metadata
-        )
-    except Exception as e:
-        # Fallback to standard completion
-        logger.warning(f"Analyst failed, falling back to standard completion: {e}")
-        response_content = await query_cortex_completion(user_message)
-        
-        # Create assistant message with the fallback response
-        assistant_message = Message(
-            id=str(uuid.uuid4()),
-            role="assistant",
-            content=response_content,
-            timestamp=datetime.now().isoformat(),
-            conversation_id=conversation_id,
-            metadata=None
-        )
-    
-    # Add to conversation
-    conversations[conversation_id].messages.append(assistant_message)
-    
-    return assistant_message
+    logger.info("Successfully initialized Cortex Analyst Tool")
+    USE_SNOWFLAKE = True
+except Exception as e:
+    logger.warning(f"Could not connect to Snowflake: {e}. Using mock implementations.")
+    session = None
+    cortex_tool = None
+    USE_SNOWFLAKE = False
 
-# Serve the HTML frontend
+# Define Pydantic models for request/response validation
+class ContentItem(BaseModel):
+    type: str
+    text: Optional[str] = None
+    suggestions: Optional[List[str]] = None
+    statement: Optional[str] = None
+    confidence: Optional[Dict] = None
+
+class Message(BaseModel):
+    role: str
+    content: List[ContentItem]
+
+class ConversationRequest(BaseModel):
+    messages: List[Message]
+    semantic_model_file: str
+
+class FeedbackRequest(BaseModel):
+    request_id: str
+    positive: bool
+    feedback_message: Optional[str] = None
+
+# Global state to store conversations
+conversations = {}
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_html(request: Request):
+    """Serve the HTML frontend"""
     return templates.TemplateResponse("index.html", {"request": request})
 
-# Function to save conversations to a file (for persistence)
-def save_conversations_to_file(filename="conversations.json"):
-    try:
-        with open(filename, "w") as f:
-            # Convert the conversations dict to a serializable format
-            serializable_convs = {}
-            for conv_id, conv in conversations.items():
-                serializable_convs[conv_id] = conv.dict()
-            json.dump(serializable_convs, f, indent=2)
-        logger.info(f"Conversations saved to {filename}")
-    except Exception as e:
-        logger.error(f"Error saving conversations: {e}")
+@app.get("/api/info")
+async def root():
+    """Root endpoint returning API information"""
+    return {
+        "name": "Cortex Analyst API",
+        "description": "API for interacting with data using natural language",
+        "version": "1.0.0"
+    }
 
-# Function to load conversations from a file (for persistence)
-def load_conversations_from_file(filename="conversations.json"):
+@app.get("/semantic-models")
+async def get_semantic_models():
+    """Get available semantic models"""
+    return {
+        "models": [
+            {"path": path, "name": path.split("/")[-1]} 
+            for path in AVAILABLE_SEMANTIC_MODELS_PATHS
+        ]
+    }
+
+@app.post("/analyst/message")
+async def analyst_message(request: Request):
+    """Send a message to the Cortex Analyst"""
     try:
-        if not os.path.exists(filename):
-            logger.info(f"Conversations file {filename} not found, starting with empty conversations")
-            return
+        # Get request body as JSON
+        request_data = await request.json()
+        
+        # Extract messages and semantic model file
+        messages = request_data.get("messages", [])
+        semantic_model_file = request_data.get("semantic_model_file", "")
+        
+        # Get the user query (last message)
+        user_query = ""
+        for message in reversed(messages):
+            if message.get("role") == "user":
+                user_content = message.get("content", [])
+                for content in user_content:
+                    if content.get("type") == "text":
+                        user_query = content.get("text", "")
+                        break
+                if user_query:
+                    break
+        
+        # Prepare the request body
+        request_body = {
+            "messages": messages,
+            "semantic_model_file": semantic_model_file,
+        }
+
+        if USE_SNOWFLAKE and cortex_tool:
+            # Call the actual Cortex Analyst API
+            logger.info(f"Sending query to Cortex Analyst: {user_query}")
+            response = await cortex_tool.ask(user_query)
             
-        with open(filename, "r") as f:
-            loaded_convs = json.load(f)
-            for conv_id, conv_data in loaded_convs.items():
-                # Convert back to Conversation objects
-                conversations[conv_id] = Conversation(**conv_data)
-        logger.info(f"Loaded {len(conversations)} conversations from {filename}")
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        logger.warning(f"Error loading conversations: {e}")
-        # If file doesn't exist or is malformed, start with empty conversations
-        pass
+            # Store conversation in memory
+            conversation_id = response.get("request_id", "default")
+            if conversation_id not in conversations:
+                conversations[conversation_id] = []
+            conversations[conversation_id].extend(messages)
+            print(response)
+            
+            # Check if there's SQL to execute
+            if "message" in response and "content" in response["message"]:
+                content = response["message"]["content"]
+                sql_result = cortex_tool.process_sql_response(content)
+                
+                if sql_result:
+                    # Store SQL result for later use
+                    if conversation_id not in conversations:
+                        conversations[conversation_id] = []
+                    conversations[conversation_id].append({
+                        "sql_result": sql_result
+                    })
+            
+            return response
+        else:
+            # Use mock implementation
+            logger.info("Using mock Cortex Analyst implementation")
+            response = mock_analyst_response(request_body)
+            
+            # Store conversation in memory
+            conversation_id = response.get("request_id", "default")
+            if conversation_id not in conversations:
+                conversations[conversation_id] = []
+            conversations[conversation_id].extend(messages)
+            
+            return response
+        
+    except Exception as e:
+        logger.error(f"Error processing analyst message: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
+@app.post("/analyst/feedback")
+async def submit_feedback(feedback: FeedbackRequest):
+    """Submit feedback for a query"""
+    try:
+        # In a real implementation, this would call Cortex Analyst API
+        # For now, we'll just return a success message
+        return {"message": "Feedback submitted successfully"}
+        
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
-async def lifespan(app: FastAPI):
-    # Create necessary directories
-    os.makedirs("static", exist_ok=True)
-    os.makedirs("templates", exist_ok=True)
-    load_conversations_from_file()
-    logger.info("Application started")
-    yield  
-    save_conversations_to_file()
-    logger.info("Application shutting down")
+@app.get("/conversations/{conversation_id}")
+async def get_conversation(conversation_id: str):
+    """Get a specific conversation by ID"""
+    if conversation_id not in conversations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    return {"conversation_id": conversation_id, "messages": conversations[conversation_id]}
 
+@app.delete("/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a specific conversation by ID"""
+    if conversation_id not in conversations:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    del conversations[conversation_id]
+    return {"message": "Conversation deleted successfully"}
+
+@app.post("/execute-sql")
+async def execute_sql(request: Dict):
+    """Execute a SQL query and return the results"""
+    query = request.get("query")
+    if not query:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Query is required"
+        )
+    
+    try:
+        if USE_SNOWFLAKE and session:
+            # Execute the query using Snowflake
+            logger.info(f"Executing SQL query: {query}")
+            try:
+                df = session.sql(query).to_pandas()
+                return {
+                    "success": True,
+                    "data": df.to_dict(orient="records"),
+                    "columns": list(df.columns)
+                }
+            except SnowparkSQLException as e:
+                logger.error(f"SQL execution error: {str(e)}")
+                return {
+                    "success": False,
+                    "error": str(e)
+                }
+        else:
+            # Use mock implementation
+            logger.info("Using mock SQL execution")
+            result = mock_sql_result(query)
+            
+            return {
+                "success": True,
+                "data": result["data"],
+                "columns": result["columns"]
+            }
+    except Exception as e:
+        logger.error(f"Error executing SQL: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+def mock_analyst_response(request_body):
+    """Mock function to simulate Cortex Analyst API response"""
+    user_message = request_body["messages"][-1]["content"][0]["text"]
+    
+    response = {
+        "request_id": f"req-{int(time.time())}",
+        "message": {
+            "role": "analyst",
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"I received your message: '{user_message}'\n\nThis is a mock response since we don't have a real Cortex Analyst API connection. In a real setup, this would provide intelligent insights based on your semantic model."
+                },
+                {
+                    "type": "suggestions",
+                    "suggestions": [
+                        "Show me top customers",
+                        "Analyze revenue trends",
+                        "What are the KPIs?"
+                    ]
+                }
+            ]
+        }
+    }
+    
+    # Add SQL response for certain queries
+    if "sql" in user_message.lower() or "data" in user_message.lower() or "query" in user_message.lower():
+        response["message"]["content"].append({
+            "type": "sql",
+            "statement": "SELECT * FROM customers LIMIT 10"
+        })
+    
+    return response
+
+def mock_sql_result(query):
+    """Mock function to simulate SQL query results"""
+    # Create a mock dataset
+    data = []
+    for i in range(10):
+        data.append({
+            "id": i + 1,
+            "name": f"Customer {i + 1}",
+            "revenue": 1000 * (i + 1),
+            "region": ["North", "South", "East", "West"][i % 4]
+        })
+    
+    return {
+        "data": data,
+        "columns": ["id", "name", "revenue", "region"]
+    }
+
+# Error handling middleware
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for all unhandled exceptions"""
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": str(exc)},
+    )
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

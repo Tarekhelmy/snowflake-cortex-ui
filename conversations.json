@@ -1,0 +1,138 @@
+{
+  "4d16beb4-ddc8-4a91-9d73-f15d4e4467d5": {
+    "id": "4d16beb4-ddc8-4a91-9d73-f15d4e4467d5",
+    "title": "test",
+    "messages": [
+      {
+        "role": "user",
+        "content": "test",
+        "id": "d82b4aaf-dacc-49de-bcb9-fc147eb9e6ca",
+        "timestamp": "2025-03-26T11:02:07.480752",
+        "conversation_id": "4d16beb4-ddc8-4a91-9d73-f15d4e4467d5",
+        "metadata": null
+      },
+      {
+        "role": "assistant",
+        "content": "I encountered an error when processing your request: 500: Failed to connect to Snowflake: 251005: 251005: User is empty",
+        "id": "5f6c231c-0807-4c91-bcb7-1c1a736d379b",
+        "timestamp": "2025-03-26T11:02:07.524423",
+        "conversation_id": "4d16beb4-ddc8-4a91-9d73-f15d4e4467d5",
+        "metadata": null
+      }
+    ],
+    "created_at": "2025-03-26T11:02:07.480752",
+    "updated_at": "2025-03-26T11:02:07.480752"
+  },
+  "09189227-0217-4db4-bc62-aea6443dd0ae": {
+    "id": "09189227-0217-4db4-bc62-aea6443dd0ae",
+    "title": "TRYING TO CONNECT",
+    "messages": [
+      {
+        "role": "user",
+        "content": "TRYING TO CONNECT",
+        "id": "ed77f226-8878-4a20-b4a7-c1c060c26fc0",
+        "timestamp": "2025-03-26T11:04:57.792809",
+        "conversation_id": "09189227-0217-4db4-bc62-aea6443dd0ae",
+        "metadata": null
+      },
+      {
+        "role": "assistant",
+        "content": "I encountered an error when processing your request: 500: Failed to connect to Snowflake: 251006: 251006: Password is empty",
+        "id": "b67c5bb6-ac9c-4fbf-bea3-66388b9414f4",
+        "timestamp": "2025-03-26T11:04:57.802538",
+        "conversation_id": "09189227-0217-4db4-bc62-aea6443dd0ae",
+        "metadata": null
+      }
+    ],
+    "created_at": "2025-03-26T11:04:57.792809",
+    "updated_at": "2025-03-26T11:04:57.792809"
+  },
+  "9dd008f9-fe6c-4221-9eb9-6db70267b981": {
+    "id": "9dd008f9-fe6c-4221-9eb9-6db70267b981",
+    "title": "TEST",
+    "messages": [
+      {
+        "role": "user",
+        "content": "TEST",
+        "id": "a2f261ac-d1d5-42c5-9f05-fc82800d4871",
+        "timestamp": "2025-03-26T11:05:15.491553",
+        "conversation_id": "9dd008f9-fe6c-4221-9eb9-6db70267b981",
+        "metadata": null
+      },
+      {
+        "role": "assistant",
+        "content": "I encountered an error when processing your request: 500: Failed to connect to Snowflake: 251006: 251006: Password is empty",
+        "id": "dd28fdfb-d31a-4cbb-888b-6d0382dbdd7b",
+        "timestamp": "2025-03-26T11:05:15.501777",
+        "conversation_id": "9dd008f9-fe6c-4221-9eb9-6db70267b981",
+        "metadata": null
+      }
+    ],
+    "created_at": "2025-03-26T11:05:15.491553",
+    "updated_at": "2025-03-26T11:05:15.491553"
+  },
+  "046fa790-23c2-43f2-8b5d-6baeb85a09c4": {
+    "id": "046fa790-23c2-43f2-8b5d-6baeb85a09c4",
+    "title": "test",
+    "messages": [
+      {
+        "role": "user",
+        "content": "test",
+        "id": "b4f50c5a-80b7-415c-8389-d29635a4e26d",
+        "timestamp": "2025-03-26T11:05:50.263938",
+        "conversation_id": "046fa790-23c2-43f2-8b5d-6baeb85a09c4",
+        "metadata": null
+      },
+      {
+        "role": "assistant",
+        "content": "I encountered an error when processing your request: 500: Failed to connect to Snowflake: 250001 (08001): None: Failed to connect to DB: VATTENFALL-VATTENFALL.snowflakecomputing.com:443. The user you were trying to authenticate as differs from the user currently logged in at the IDP.",
+        "id": "d3b881d7-162b-49a8-ab7e-5e36d1de7a82",
+        "timestamp": "2025-03-26T11:06:03.661283",
+        "conversation_id": "046fa790-23c2-43f2-8b5d-6baeb85a09c4",
+        "metadata": null
+      }
+    ],
+    "created_at": "2025-03-26T11:05:50.263938",
+    "updated_at": "2025-03-26T11:05:50.263938"
+  },
+  "50f391ad-7211-47f8-ade1-08d40b1c52c6": {
+    "id": "50f391ad-7211-47f8-ade1-08d40b1c52c6",
+    "title": "test",
+    "messages": [
+      {
+        "role": "user",
+        "content": "test",
+        "id": "368c4061-c9c2-40a4-a9c9-2bc9fba1978c",
+        "timestamp": "2025-03-26T11:06:35.660154",
+        "conversation_id": "50f391ad-7211-47f8-ade1-08d40b1c52c6",
+        "metadata": null
+      },
+      {
+        "role": "assistant",
+        "content": "I encountered an error analyzing your question: (1304): 01bb43ba-0105-ecd6-0000-019163e5bec2: 000943 (42601): 01bb43ba-0105-ecd6-0000-019163e5bec2: SQL compilation error: error line 1 at position 7\nillegal mixing of named and positional arguments for function CORTEX_ANALYST",
+        "id": "47277db0-2415-4d75-8171-6196254fb8f6",
+        "timestamp": "2025-03-26T11:06:43.888183",
+        "conversation_id": "50f391ad-7211-47f8-ade1-08d40b1c52c6",
+        "metadata": null
+      },
+      {
+        "role": "user",
+        "content": "what is the most visited page",
+        "id": "d4131a0c-5076-4438-921e-23f54e51bb7c",
+        "timestamp": "2025-03-26T11:07:08.414871",
+        "conversation_id": "50f391ad-7211-47f8-ade1-08d40b1c52c6",
+        "metadata": null
+      },
+      {
+        "role": "assistant",
+        "content": "I encountered an error analyzing your question: (1304): 01bb43bc-0105-e144-0000-019163e5f70e: 000943 (42601): 01bb43bc-0105-e144-0000-019163e5f70e: SQL compilation error: error line 1 at position 7\nillegal mixing of named and positional arguments for function CORTEX_ANALYST",
+        "id": "c29a345b-a58b-48ae-b4de-4d93bbb0432d",
+        "timestamp": "2025-03-26T11:08:37.597778",
+        "conversation_id": "50f391ad-7211-47f8-ade1-08d40b1c52c6",
+        "metadata": null
+      }
+    ],
+    "created_at": "2025-03-26T11:06:35.660154",
+    "updated_at": "2025-03-26T11:07:08.414871"
+  }
+}

@@ -1,6 +1,9 @@
 fastapi
 uvicorn
-snowflake-connector-python
 snowflake-cli
 python-dotenv
 jinja2
+sseclient-py
+Requests
+snowflake_connector_python
+aiohttp
