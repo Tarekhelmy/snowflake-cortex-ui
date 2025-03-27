@@ -355,17 +355,6 @@ select {
     align-items: center;
     justify-content: center;
 }
-.logo {
-    width: 20px;
-    height: 20px;
-    margin-right: 10px;
-}
-
-.logo-container {
-    display: flex;
-    align-items: center;
-    margin-bottom: 20px;
-}
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .app-container {
