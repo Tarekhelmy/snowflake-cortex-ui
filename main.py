@@ -218,9 +218,9 @@ def get_snowflake_session():
                 'account': os.getenv('SNOWFLAKE_ACCOUNT'),
                 'authenticator': "oauth",
                 'token': open('/snowflake/session/token', 'r').read(),
-                'warehouse': os.getenv('SNOWFLAKE_WAREHOUSE'),
-                'database': os.getenv('SNOWFLAKE_DATABASE'),
-                'schema': os.getenv('SNOWFLAKE_SCHEMA'),
+                'warehouse': 'POC_XSMALL',
+                'database': 'VAP_DEV_VAPNL_POC',
+                'schema': 'ANALYSE_POC',
                 'client_session_keep_alive': True
             }
         else:
@@ -450,27 +450,36 @@ async def delete_conversation(conversation_id: str):
     return {"message": "Conversation deleted successfully"}
 
 @app.post("/execute-sql")
-async def execute_sql(request: Dict):
+async def execute_sql(request: Request):
     """Execute a SQL query and return the results"""
-    query = request.get("query")
-    if not query:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Query is required"
-        )
-    
     try:
+        # Get request data as JSON
+        request_data = await request.json()
+        query = request_data.get("query")
+        
+        if not query:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Query is required"
+            )
+        
         if USE_SNOWFLAKE and session:
             # Execute the query using Snowflake
             logger.info(f"Executing SQL query: {query}")
             try:
-                df = session.sql(query).to_pandas()
+                # Get results as pandas DataFrame
+                df = session.cursor().execute(query).fetch_pandas_all()
+                
+                # Convert to native Python types for JSON serialization
+                # This fixes the numpy.int64 not iterable error
+                records = df.to_dict(orient="records")
+                
                 return {
                     "success": True,
-                    "data": df.to_dict(orient="records"),
+                    "data": records,
                     "columns": list(df.columns)
                 }
-            except SnowparkSQLException as e:
+            except Exception as e:
                 logger.error(f"SQL execution error: {str(e)}")
                 return {
                     "success": False,

@@ -3,7 +3,8 @@ uvicorn
 snowflake-cli
 python-dotenv
 jinja2
+pandas
 sseclient-py
 Requests
-snowflake_connector_python
+snowflake_connector_python[pandas]
 aiohttp
