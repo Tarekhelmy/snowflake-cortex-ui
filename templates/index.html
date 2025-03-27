@@ -5,11 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cortex Analyst Chat</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', path='/images/favicon.ico') }}" type="image/x-icon">
 </head>
 <body>
     <div class="app-container">
         <div class="sidebar">
-            <h2>Cortex Analyst</h2>
+            <div class="logo-container">
+                <img src="{{ url_for('static', path='/images/cortex-logo.png') }}" alt="Cortex Analyst Logo" class="logo" width="200" height="200">
+                <h2>Cortex Analyst</h2>
+            </div>
             
             <div class="sidebar-section">
                 <h3>Semantic Model</h3>
@@ -34,7 +38,12 @@
 
             <div class="chat-input">
                 <input type="text" id="user-input" placeholder="Type your question..." />
-                <button id="send-btn" class="btn send-btn">Send</button>
+                <button id="send-btn" class="btn send-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
             </div>
         </div>
     </div>

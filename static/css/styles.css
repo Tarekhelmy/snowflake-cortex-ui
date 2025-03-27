@@ -39,9 +39,21 @@ body {
     flex-direction: column;
 }
 
-.sidebar h2 {
+.logo-container {
+    display: flex;
+    align-items: center;
     margin-bottom: 20px;
+}
+
+.logo {
+    width: 40px;
+    height: 40px;
+    margin-right: 10px;
+}
+
+.sidebar h2 {
     color: var(--primary-color);
+    font-size: 1.5rem;
 }
 
 .sidebar-section {
@@ -143,19 +155,33 @@ select {
     padding: 15px;
     background-color: var(--white);
     border-top: 1px solid #e0e0e0;
+    align-items: center;
 }
 
 .chat-input input {
     flex: 1;
-    padding: 10px;
+    padding: 12px 15px;
     border: 1px solid #e0e0e0;
     border-radius: var(--border-radius);
     outline: none;
     margin-right: 10px;
+    font-size: 14px;
 }
 
 .send-btn {
-    padding: 10px 20px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.send-btn svg {
+    width: 20px;
+    height: 20px;
 }
 
 .suggestions {
@@ -328,4 +354,32 @@ select {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+.logo {
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .message {
+        max-width: 90%;
+    }
 }
